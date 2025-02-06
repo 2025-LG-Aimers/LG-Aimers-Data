@@ -7,7 +7,7 @@ from sklearn.impute import SimpleImputer  # ✅ 결측치 평균 대체 추가
 from sklearn.metrics import roc_auc_score, accuracy_score  # ✅ Accuracy Score 추가
 
 # -------------- 📌 데이터 로딩 -------------- 
-train = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/train_rebalancing_v1.csv').drop(columns=['ID'])
+train = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/train.csv').drop(columns=['ID'])
 test = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/test.csv').drop(columns=['ID'])
 
 # -------------- 📌 타겟 변수 분리 -------------- 
