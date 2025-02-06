@@ -6,7 +6,7 @@ from sklearn.preprocessing import OrdinalEncoder
 from sklearn.metrics import roc_auc_score, accuracy_score  # ✅ Accuracy Score 추가
 
 # -------------- 📌 데이터 로딩 -------------- 
-train = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/train_rebalancing_v3.csv').drop(columns=['ID'])
+train = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/train_rebalancing_v1.csv').drop(columns=['ID'])
 test = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/test.csv').drop(columns=['ID'])
 
 # -------------- 📌 타겟 변수 분리 -------------- 
@@ -121,7 +121,7 @@ test_pred_proba = xgb_model.predict(dtest)
 test_pred_class = (test_pred_proba > 0.5).astype(int)  # 확률 → 클래스 변환
 
 sample_submission = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/sample_submission.csv')
-sample_submission['probability'] = test_pred_class  # 🔥 0 또는 1로 저장
+sample_submission['probability'] = test_pred_proba  # 🔥 0 또는 1로 저장
 sample_submission.to_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/baseline_submit_xgboost.csv', index=False)
 
 print("✅ XGBoost 모델 학습 & 예측 완료, 결과 저장됨.")
