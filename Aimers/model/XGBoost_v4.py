@@ -7,8 +7,8 @@ from sklearn.impute import SimpleImputer  # ✅ 결측치 평균 대체 추가
 from sklearn.metrics import roc_auc_score, accuracy_score  # ✅ Accuracy Score 추가
 
 # -------------- 📌 데이터 로딩 --------------
-train = pd.read_csv('./train.csv').drop(columns=['ID'])
-test = pd.read_csv('./test.csv').drop(columns=['ID'])
+train = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/train.csv').drop(columns=['ID'])
+test = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/test.csv').drop(columns=['ID'])
 
 # -------------- 📌 타겟 변수 분리 --------------
 X = train.drop(columns=['임신 성공 여부'])  # 입력 데이터 (Feature)
@@ -122,6 +122,6 @@ print(f"✅ 검증 데이터 Accuracy Score: {accuracy:.4f}")
 dtest = xgb.DMatrix(test)
 test_pred_proba = xgb_model.predict(dtest)
 
-sample_submission = pd.read_csv('./sample_submission.csv')
+sample_submission = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/sample_submission.csv')
 sample_submission['probability'] = test_pred_proba
-sample_submission.to_csv('./XGBoost(99%).csv', index=False)
+sample_submission.to_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/XGBoost(95%).csv', index=False)
