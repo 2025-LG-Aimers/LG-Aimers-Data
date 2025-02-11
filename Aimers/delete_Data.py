@@ -1,7 +1,7 @@
 import pandas as pd
 
 # 파일 로드 (인코딩 확인 후 적절한 방식 선택)
-file_path = "C:/Users/ANTL/Desktop/LG Aimers Data/train.csv"
+file_path = "C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/train.csv"
 df = pd.read_csv(file_path, encoding="utf-8")
 
 # 삭제할 컬럼 리스트 (기존 삭제 대상 + 추가 삭제 대상 포함)
