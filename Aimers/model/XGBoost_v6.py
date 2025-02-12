@@ -1,11 +1,10 @@
 import pandas as pd
 import numpy as np
-import xgboost as xgb  # ✅ XGBoost 사용
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+import xgboost as xgb
+from sklearn.model_selection import train_test_split  # ✅ 데이터 분할 추가
+from sklearn.preprocessing import OrdinalEncoder
 from sklearn.impute import SimpleImputer
-from sklearn.svm import LinearSVC  # ✅ 선형 SVC 추가
-from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.metrics import roc_auc_score, accuracy_score  # ✅ 성능 평가 추가
 
 # -------------- 📌 데이터 로딩 --------------
 train = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/train.csv').drop(columns=['ID'])
@@ -15,9 +14,11 @@ test = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/test.csv').dro
 X = train.drop(columns=['임신 성공 여부'])  # 입력 데이터 (Feature)
 y = train['임신 성공 여부']  # 타겟 변수 (Label)
 
-# ✅ 1. 훈련(66%)과 검증(34%)으로 데이터 분할
+print(f"🔹 전체 학습 데이터 크기: {X.shape}")
+
+# ✅ 1. 훈련 데이터 66% / 검증 데이터 34%로 분할
 X_train, X_valid, y_train, y_valid = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
+    X, y, test_size=0.34, random_state=42, stratify=y
 )
 
 print(f"🔹 학습 데이터 크기: {X_train.shape}, 검증 데이터 크기: {X_valid.shape}")
@@ -66,7 +67,7 @@ test[ordinal_columns] = ordinal_encoder.transform(test[ordinal_columns])
 
 # ✅ 6. 명목형 데이터(Nominal) → Target Encoding 적용
 for col in nominal_columns:
-    target_mean = train.groupby(col)['임신 성공 여부'].mean()
+    target_mean = train.groupby(col)['임신 성공 여부'].mean()  # ✅ 원본 데이터에서 그룹화
     X_train[col] = X_train[col].map(target_mean)
     X_valid[col] = X_valid[col].map(target_mean).fillna(X_train[col].mean())
     test[col] = test[col].map(target_mean).fillna(X_train[col].mean())
@@ -82,49 +83,37 @@ params = {
     "random_state": 42
 }
 
-# XGBoost 전용 DMatrix 생성
+# ✅ XGBoost 전용 DMatrix 생성
 dtrain = xgb.DMatrix(X_train, label=y_train)
+dvalid = xgb.DMatrix(X_valid, label=y_valid)
 
-# 🔥 XGBoost 모델 학습
+# 🔥 Early Stopping 적용 (조기 종료: 50 라운드 연속 개선 없으면 중단)
+watchlist = [(dtrain, "train"), (dvalid, "valid")]
 xgb_model = xgb.train(
     params=params,
     dtrain=dtrain,
-    num_boost_round=500,
+    num_boost_round=1000,  # ✅ 최대 1000 라운드
+    evals=watchlist,
+    early_stopping_rounds=50,  # ✅ 검증 데이터 개선 없으면 조기 종료
     verbose_eval=True
 )
 
-# ✅ XGBoost에서 중요한 특징 선택 (상위 10개)
-feature_importance = xgb_model.get_score(importance_type="weight")
-sorted_features = sorted(feature_importance, key=feature_importance.get, reverse=True)[:10]
-X_train_selected = X_train[sorted_features]
-X_valid_selected = X_valid[sorted_features]
-test_selected = test[sorted_features]
+# -------------- 📌 검증 데이터에서 성능 평가 --------------
+valid_pred_proba = xgb_model.predict(dvalid)
+valid_pred_class = (valid_pred_proba > 0.5).astype(int)
 
-print(f"✅ 선택된 특징: {sorted_features}")
-
-# ✅ 7. 데이터 정규화 (Linear SVC는 정규화가 필요함)
-scaler = StandardScaler()
-X_train_selected = scaler.fit_transform(X_train_selected)
-X_valid_selected = scaler.transform(X_valid_selected)
-test_selected = scaler.transform(test_selected)
-
-# ✅ 8. Linear SVC 모델 학습
-svc_model = LinearSVC(max_iter=10000, random_state=42)
-svc_model.fit(X_train_selected, y_train)
-
-# -------------- 📌 검증 데이터에서 ROC-AUC 및 Accuracy 평가 --------------
-valid_pred_class = svc_model.predict(X_valid_selected)
-auc_score = roc_auc_score(y_valid, valid_pred_class)
+auc_score = roc_auc_score(y_valid, valid_pred_proba)
 accuracy = accuracy_score(y_valid, valid_pred_class)
 
-print(f"🔥 Linear SVC 검증 데이터 ROC-AUC Score: {auc_score:.4f}")
-print(f"✅ Linear SVC 검증 데이터 Accuracy Score: {accuracy:.4f}")
+print(f"🔥 검증 데이터 ROC-AUC Score: {auc_score:.4f}")
+print(f"✅ 검증 데이터 Accuracy Score: {accuracy:.4f}")
 
 # -------------- 📌 테스트 데이터 예측 및 결과 저장 --------------
-test_pred_class = svc_model.predict(test_selected)
+dtest = xgb.DMatrix(test)
+test_pred_proba = xgb_model.predict(dtest)
 
 sample_submission = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/sample_submission.csv')
-sample_submission['probability'] = test_pred_class
-sample_submission.to_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/XGBoost_SVC.csv', index=False)
+sample_submission['probability'] = test_pred_proba
+sample_submission.to_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/XGBoost_TgtEnc_66-34.csv', index=False)
 
-print("✅ XGBoost 특징 선택 + Linear SVC 학습 완료, 결과 저장됨.")
+print("✅ XGBoost 모델 학습 & 예측 완료, 결과 저장됨.")
