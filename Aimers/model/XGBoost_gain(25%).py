@@ -18,7 +18,7 @@ y = train['임신 성공 여부']  # 타겟 변수 (Label)
 # 제거할 컬럼 리스트
 columns_to_remove = []
 
-# 편향된 컬럼 탐색 (95% 이상 한 값으로 채워진 컬럼)
+# 편향된 컬럼 탐색 (99% 이상 한 값으로 채워진 컬럼)
 threshold = 0.99
 biased_columns = [col for col in X.columns if X[col].value_counts(normalize=True).max() >= threshold]
 
