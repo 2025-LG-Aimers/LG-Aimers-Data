@@ -93,7 +93,7 @@ for rs in random_states:
     mean_auc = np.mean(fold_auc_scores)
     auc_scores.append([rs, mean_auc])
 
-    print(f"🎲 random_state={rs} -> 평균 AUC: {mean_auc:.4f}")
+    print(f"🎲 random_state={rs} -> 평균 AUC: {mean_auc:.10f}")
 
 # ✅ 최적의 random_state 찾기
 df_results = pd.DataFrame(auc_scores, columns=["random_state", "AUC"])
