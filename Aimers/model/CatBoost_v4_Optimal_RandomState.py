@@ -30,8 +30,8 @@ y = df_train[target_col]
 
 # ✅ 편향된 컬럼 제거
 biased_cols = [
-    "신선 배아 사용 여부", "미세주입된 난자 수", "IVF 시술 횟수",
-    "IVF 임신 횟수", "총 출산 횟수", "정자 출처"
+    "신선 배아 사용 여부", "미세주입된 난자 수", "혼합된 난자 수",
+    "IVF 시술 횟수", "IVF 임신 횟수", "총 출산 횟수", "정자 출처"
 ]
 threshold = 0.95
 biased_cols += [col for col in X.columns if X[col].value_counts(normalize=True).max() >= threshold]
