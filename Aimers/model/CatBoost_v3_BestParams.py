@@ -86,6 +86,8 @@ for fold, (train_idx, valid_idx) in enumerate(kf.split(X, y)):
     y_train, y_valid = y.iloc[train_idx], y.iloc[valid_idx]
 
     # 모델 학습
+    # 'verbose' 키 제거 후 전달
+    best_config.pop("verbose", None)  # verbose가 존재하면 제거
     best_model = CatBoostClassifier(**best_config, verbose=0)
     best_model.fit(X_train, y_train, cat_features=categorical_features)
 
