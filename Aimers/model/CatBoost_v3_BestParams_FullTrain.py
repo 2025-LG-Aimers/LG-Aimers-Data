@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import pickle
 from catboost import CatBoostClassifier
-from sklearn.calibration import CalibratedClassifierCV
 
 # ✅ 데이터 로드
 train_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/train.csv"
@@ -22,23 +21,21 @@ target = "임신 성공 여부"
 X = df_train.drop(columns=["ID", target], errors="ignore")
 y = df_train[target]
 
-# 🛠️ **4. 특정 시술 유형('DI')에서 결측치 여부를 새로운 컬럼으로 추가**
-target_columns = [
-    "단일 배아 이식 여부", "총 생성 배아 수", "미세주입에서 생성된 배아 수", "이식된 배아 수",
-    "미세주입 배아 이식 수", "저장된 배아 수", "미세주입 후 저장된 배아 수", "해동된 배아 수",
-    "수집된 신선 난자 수", "파트너 정자와 혼합된 난자 수", "기증자 정자와 혼합된 난자 수", "동결 배아 사용 여부"
-]
+# # 🛠️ **특정 시술 유형('DI')에서 결측치 여부를 새로운 컬럼으로 추가**
+# target_columns = [
+#     "단일 배아 이식 여부", "총 생성 배아 수", "미세주입에서 생성된 배아 수", "이식된 배아 수",
+#     "미세주입 배아 이식 수", "저장된 배아 수", "미세주입 후 저장된 배아 수", "해동된 배아 수",
+#     "수집된 신선 난자 수", "파트너 정자와 혼합된 난자 수", "기증자 정자와 혼합된 난자 수", "동결 배아 사용 여부"
+# ]
 
-# 🔥 '시술 유형' 컬럼이 존재하는 경우에만 실행
-if "시술 유형" in df_train.columns:
-    condition_train = df_train["시술 유형"] == "DI"
-    for col in target_columns:
-        df_train[f"{col}_IS_MISSING"] = df_train[col].isnull().astype(int)
+# # 🔥 '시술 유형' 컬럼이 존재하는 경우에만 실행
+# if "시술 유형" in df_train.columns:
+#     for col in target_columns:
+#         df_train[f"{col}_IS_MISSING"] = df_train[col].isnull().astype(int)
 
-if "시술 유형" in df_test.columns:
-    condition_test = df_test["시술 유형"] == "DI"
-    for col in target_columns:
-        df_test[f"{col}_IS_MISSING"] = df_test[col].isnull().astype(int)
+# if "시술 유형" in df_test.columns:
+#     for col in target_columns:
+#         df_test[f"{col}_IS_MISSING"] = df_test[col].isnull().astype(int)
 
 # ✅ 편향된 컬럼 제거
 biased_cols = [
@@ -72,7 +69,15 @@ for col in categorical_features:
     X[col] = X[col].astype(str)
     df_test[col] = df_test[col].astype(str)
 
-# 테스트 데이터 컬럼 맞추기
+# ✅ 최종 남아 있는 컬럼 확인
+remaining_columns = X.columns.tolist()
+
+# ✅ 출력
+print("✅ 최종 남아 있는 컬럼 개수:", len(remaining_columns))
+print("✅ 최종 남아 있는 컬럼 목록:")
+print(remaining_columns)
+
+# ✅ 테스트 데이터 컬럼 맞추기
 df_test = df_test.reindex(columns=X.columns, fill_value=0)
 
 # ✅ 저장된 최적의 파라미터 로드
@@ -98,24 +103,11 @@ best_model.fit(X, y, cat_features=categorical_features)
 print("\n🚀 테스트 데이터 예측 중...")
 test_preds = best_model.predict_proba(df_test)[:, 1]
 
-# ✅ 후처리 캘리브레이션 (Platt Scaling)
-print("\n🚀 Platt Scaling 캘리브레이션 적용...")
-cal_model = CalibratedClassifierCV(best_model, method="sigmoid", cv="prefit")
-cal_model.fit(X.values, y)
-
-# ✅ 캘리브레이션 후 테스트 데이터 예측
-calibrated_test_preds = cal_model.predict_proba(df_test.values)[:, 1]
-
 # ✅ sample_submission 생성
-submission_raw = pd.DataFrame({"ID": test_ids, "probability": test_preds})  # 원본 모델 예측값
-submission_calibrated = pd.DataFrame({"ID": test_ids, "probability": calibrated_test_preds})  # 캘리브레이션된 예측값
+submission = pd.DataFrame({"ID": test_ids, "probability": test_preds})
 
 # ✅ 최종 CSV 저장
-raw_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v3_FullTrain_raw.csv"
-calibrated_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v3_FullTrain_calibrated.csv"
+final_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v3_FullTrain.csv"
+submission.to_csv(final_csv_path, index=False)
 
-submission_raw.to_csv(raw_csv_path, index=False)
-submission_calibrated.to_csv(calibrated_csv_path, index=False)
-
-print(f"✅ 원본 모델 예측 결과 저장 완료: {raw_csv_path}")
-print(f"✅ 캘리브레이션 적용 모델 예측 결과 저장 완료: {calibrated_csv_path}")
+print(f"✅ 원본 모델 예측 결과 저장 완료: {final_csv_path}")

@@ -3,7 +3,6 @@ import pandas as pd
 import pickle
 from catboost import CatBoostClassifier
 from sklearn.model_selection import StratifiedKFold
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score, accuracy_score
 
 # ✅ 데이터 로드
@@ -56,7 +55,7 @@ for col in categorical_features:
     X[col] = X[col].astype(str)
     df_test[col] = df_test[col].astype(str)
 
-# 테스트 데이터 컬럼 맞추기
+# ✅ 테스트 데이터 컬럼 맞추기
 df_test = df_test.reindex(columns=X.columns, fill_value=0)
 
 # ✅ 저장된 최적의 파라미터 로드
@@ -78,11 +77,8 @@ kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
 # ✅ K-Fold 학습 및 예측 저장
 test_preds = np.zeros(len(df_test))  # 원본 모델 예측값 저장
-calibrated_preds = np.zeros(len(df_test))  # 캘리브레이션된 모델 예측값 저장
 auc_scores = []
 accuracy_scores = []
-calibrated_auc_scores = []
-calibrated_accuracy_scores = []
 
 for fold, (train_idx, valid_idx) in enumerate(kf.split(X, y)):
     print(f"🚀 Fold {fold + 1} 학습 시작...")
@@ -101,36 +97,19 @@ for fold, (train_idx, valid_idx) in enumerate(kf.split(X, y)):
     auc_scores.append(roc_auc_score(y_valid, valid_probs))
     accuracy_scores.append(accuracy_score(y_valid, valid_preds))
 
-    # ✅ 후처리 캘리브레이션 (Platt Scaling)
-    cal_model = CalibratedClassifierCV(best_model, method="sigmoid", cv="prefit")
-    cal_model.fit(X_valid.values, y_valid)
-
-    # ✅ 캘리브레이션 후 검증 데이터 예측
-    valid_calibrated_probs = cal_model.predict_proba(X_valid.values)[:, 1]
-    valid_calibrated_preds = cal_model.predict(X_valid.values)
-    calibrated_auc_scores.append(roc_auc_score(y_valid, valid_calibrated_probs))
-    calibrated_accuracy_scores.append(accuracy_score(y_valid, valid_calibrated_preds))
-
     # ✅ 테스트 데이터 예측
     test_preds += best_model.predict_proba(df_test)[:, 1] / n_splits
-    calibrated_preds += cal_model.predict_proba(df_test.values)[:, 1] / n_splits
 
     print(f"✅ Fold {fold + 1} 완료!")
 
 # ✅ 평균 점수 출력
 print(f"\n🏆 K-Fold 평균 AUC: {np.mean(auc_scores):.10f} | 평균 Accuracy: {np.mean(accuracy_scores):.10f}")
-print(f"🎯 캘리브레이션 적용 후 평균 AUC: {np.mean(calibrated_auc_scores):.10f} | 캘리브레이션 적용 후 평균 Accuracy: {np.mean(calibrated_accuracy_scores):.10f}")
 
 # ✅ sample_submission 생성
-submission_raw = pd.DataFrame({"ID": test_ids, "probability": test_preds})  # 원본 모델 예측값
-submission_calibrated = pd.DataFrame({"ID": test_ids, "probability": calibrated_preds})  # 캘리브레이션된 예측값
+submission = pd.DataFrame({"ID": test_ids, "probability": test_preds})
 
 # ✅ 최종 CSV 저장
-raw_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v2_kfold_raw.csv"
-calibrated_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v2_kfold_calibrated.csv"
+final_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v2_kfold.csv"
+submission.to_csv(final_csv_path, index=False)
 
-submission_raw.to_csv(raw_csv_path, index=False)
-submission_calibrated.to_csv(calibrated_csv_path, index=False)
-
-print(f"✅ 원본 모델 예측 결과 저장 완료: {raw_csv_path}")
-print(f"✅ 캘리브레이션 적용 모델 예측 결과 저장 완료: {calibrated_csv_path}")
+print(f"✅ 원본 모델 예측 결과 저장 완료: {final_csv_path}")

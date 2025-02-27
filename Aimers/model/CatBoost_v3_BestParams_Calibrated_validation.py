@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pickle
 from catboost import CatBoostClassifier
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import train_test_split
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import roc_auc_score, accuracy_score
 
@@ -23,6 +23,24 @@ test_ids = df_sample_submission["ID"]
 target = "임신 성공 여부"
 X = df_train.drop(columns=["ID", target], errors="ignore")
 y = df_train[target]
+
+# 🛠️ **4. 특정 시술 유형('DI')에서 결측치 여부를 새로운 컬럼으로 추가**
+target_columns = [
+    "단일 배아 이식 여부", "총 생성 배아 수", "미세주입에서 생성된 배아 수", "이식된 배아 수",
+    "미세주입 배아 이식 수", "저장된 배아 수", "미세주입 후 저장된 배아 수", "해동된 배아 수",
+    "수집된 신선 난자 수", "파트너 정자와 혼합된 난자 수", "기증자 정자와 혼합된 난자 수", "동결 배아 사용 여부"
+]
+
+# 🔥 '시술 유형' 컬럼이 존재하는 경우에만 실행
+if "시술 유형" in df_train.columns:
+    condition_train = df_train["시술 유형"] == "DI"
+    for col in target_columns:
+        df_train[f"{col}_IS_MISSING"] = df_train[col].isnull().astype(int)
+
+if "시술 유형" in df_test.columns:
+    condition_test = df_test["시술 유형"] == "DI"
+    for col in target_columns:
+        df_test[f"{col}_IS_MISSING"] = df_test[col].isnull().astype(int)
 
 # ✅ 편향된 컬럼 제거
 biased_cols = [
@@ -59,6 +77,9 @@ for col in categorical_features:
 # 테스트 데이터 컬럼 맞추기
 df_test = df_test.reindex(columns=X.columns, fill_value=0)
 
+# ✅ 학습 데이터 80%, 검증 데이터 20%로 분할
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
 # ✅ 저장된 최적의 파라미터 로드
 try:
     with open(param_path, "rb") as f:
@@ -72,62 +93,45 @@ except Exception as e:
 if best_config.get("task_type") == "GPU":
     best_config["eval_metric"] = "Logloss"
 
-# ✅ K-Fold 교차 검증 적용 (StratifiedKFold)
-n_splits = 5
-kf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+# ✅ CatBoost 모델 학습
+print("🚀 모델 학습 시작...")
+best_config.pop("verbose", None)
+best_model = CatBoostClassifier(**best_config, verbose=0)
+best_model.fit(X_train, y_train, cat_features=categorical_features)
 
-# ✅ K-Fold 학습 및 예측 저장
-test_preds = np.zeros(len(df_test))  # 원본 모델 예측값 저장
-calibrated_preds = np.zeros(len(df_test))  # 캘리브레이션된 모델 예측값 저장
-auc_scores = []
-accuracy_scores = []
-calibrated_auc_scores = []
-calibrated_accuracy_scores = []
+# ✅ 검증 데이터 예측 (원본 모델)
+valid_probs = best_model.predict_proba(X_valid)[:, 1]
+valid_preds = best_model.predict(X_valid)
+auc_score = roc_auc_score(y_valid, valid_probs)
+accuracy = accuracy_score(y_valid, valid_preds)
 
-for fold, (train_idx, valid_idx) in enumerate(kf.split(X, y)):
-    print(f"🚀 Fold {fold + 1} 학습 시작...")
+print(f"\n🏆 검증 데이터 AUC: {auc_score:.10f} | Accuracy: {accuracy:.10f}")
 
-    X_train, X_valid = X.iloc[train_idx], X.iloc[valid_idx]
-    y_train, y_valid = y.iloc[train_idx], y.iloc[valid_idx]
+# ✅ 후처리 캘리브레이션 (Platt Scaling)
+print("\n🚀 Platt Scaling 캘리브레이션 적용...")
+cal_model = CalibratedClassifierCV(best_model, method="sigmoid", cv="prefit")
+cal_model.fit(X_valid.values, y_valid)
 
-    # ✅ 모델 학습
-    best_config.pop("verbose", None)
-    best_model = CatBoostClassifier(**best_config, verbose=0)
-    best_model.fit(X_train, y_train, cat_features=categorical_features)
+# ✅ 캘리브레이션 후 검증 데이터 예측
+valid_calibrated_probs = cal_model.predict_proba(X_valid.values)[:, 1]
+valid_calibrated_preds = cal_model.predict(X_valid.values)
+calibrated_auc_score = roc_auc_score(y_valid, valid_calibrated_probs)
+calibrated_accuracy = accuracy_score(y_valid, valid_calibrated_preds)
 
-    # ✅ 검증 데이터 예측 (원본 모델)
-    valid_probs = best_model.predict_proba(X_valid)[:, 1]
-    valid_preds = best_model.predict(X_valid)
-    auc_scores.append(roc_auc_score(y_valid, valid_probs))
-    accuracy_scores.append(accuracy_score(y_valid, valid_preds))
+print(f"🎯 캘리브레이션 적용 후 검증 AUC: {calibrated_auc_score:.10f} | Accuracy: {calibrated_accuracy:.10f}")
 
-    # ✅ 후처리 캘리브레이션 (Platt Scaling)
-    cal_model = CalibratedClassifierCV(best_model, method="sigmoid", cv="prefit")
-    cal_model.fit(X_valid.values, y_valid)
-
-    # ✅ 캘리브레이션 후 검증 데이터 예측
-    valid_calibrated_probs = cal_model.predict_proba(X_valid.values)[:, 1]
-    valid_calibrated_preds = cal_model.predict(X_valid.values)
-    calibrated_auc_scores.append(roc_auc_score(y_valid, valid_calibrated_probs))
-    calibrated_accuracy_scores.append(accuracy_score(y_valid, valid_calibrated_preds))
-
-    # ✅ 테스트 데이터 예측
-    test_preds += best_model.predict_proba(df_test)[:, 1] / n_splits
-    calibrated_preds += cal_model.predict_proba(df_test.values)[:, 1] / n_splits
-
-    print(f"✅ Fold {fold + 1} 완료!")
-
-# ✅ 평균 점수 출력
-print(f"\n🏆 K-Fold 평균 AUC: {np.mean(auc_scores):.10f} | 평균 Accuracy: {np.mean(accuracy_scores):.10f}")
-print(f"🎯 캘리브레이션 적용 후 평균 AUC: {np.mean(calibrated_auc_scores):.10f} | 캘리브레이션 적용 후 평균 Accuracy: {np.mean(calibrated_accuracy_scores):.10f}")
+# ✅ 테스트 데이터 예측
+print("\n🚀 테스트 데이터 예측 중...")
+test_preds = best_model.predict_proba(df_test)[:, 1]
+calibrated_test_preds = cal_model.predict_proba(df_test.values)[:, 1]
 
 # ✅ sample_submission 생성
 submission_raw = pd.DataFrame({"ID": test_ids, "probability": test_preds})  # 원본 모델 예측값
-submission_calibrated = pd.DataFrame({"ID": test_ids, "probability": calibrated_preds})  # 캘리브레이션된 예측값
+submission_calibrated = pd.DataFrame({"ID": test_ids, "probability": calibrated_test_preds})  # 캘리브레이션된 예측값
 
 # ✅ 최종 CSV 저장
-raw_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v2_kfold_raw.csv"
-calibrated_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v2_kfold_calibrated.csv"
+raw_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v2_80_20_raw.csv"
+calibrated_csv_path = "C:/Users/mch2d/Desktop/LG-Aimers-Data-main/catboost_Best_Params_v2_80_20_calibrated.csv"
 
 submission_raw.to_csv(raw_csv_path, index=False)
 submission_calibrated.to_csv(calibrated_csv_path, index=False)
