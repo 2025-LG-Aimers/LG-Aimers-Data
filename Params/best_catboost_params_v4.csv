@@ -1,0 +1,2 @@
+iterations,depth,learning_rate,l2_leaf_reg,border_count,grow_policy,bagging_temperature,random_strength,random_seed,eval_metric,loss_function,task_type,devices,verbose
+2194,5,0.052208738904294984,5.654464973739339,60,SymmetricTree,2.9352347328988215,0.0014955922264855426,42,AUC,Logloss,GPU,0,0
