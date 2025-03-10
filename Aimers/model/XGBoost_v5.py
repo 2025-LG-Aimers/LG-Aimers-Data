@@ -39,8 +39,8 @@ columns_to_remove = ["신선 배아 사용 여부", "미세주입된 난자 수"
 
 # print(f"✅ PCA 적용 완료! 변환된 변수: PCA_배아_난자")
 
-# 편향된 컬럼 탐색 (97% 이상 한 값으로 채워진 컬럼)
-threshold = 0.97
+# 편향된 컬럼 탐색 (95% 이상 한 값으로 채워진 컬럼)
+threshold = 0.95
 biased_columns = [col for col in X.columns if X[col].value_counts(normalize=True).max() >= threshold]
 
 # 전체 제거할 컬럼 리스트
@@ -119,6 +119,6 @@ test_pred_proba = xgb_model.predict(dtest)
 
 sample_submission = pd.read_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/sample_submission.csv')
 sample_submission['probability'] = test_pred_proba
-sample_submission.to_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/XGBoost_full_train(threshold_0.97).csv', index=False)
+sample_submission.to_csv('C:/Users/ANTL/Documents/GitHub/LG-Aimers-Data/XGBoost_full_train(threshold_0.95).csv', index=False)
 
 print("✅ XGBoost 모델 학습 & 예측 완료, 결과 저장됨.")
